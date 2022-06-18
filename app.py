@@ -2,62 +2,18 @@
 
 from flask import Flask, request
 from flask_restx import Api, Resource
-from flask_sqlalchemy import SQLAlchemy
-from marshmallow import Schema, fields
+from setup_db import db
+from schemas import MovieSchema, DirectorSchema, GenreSchema
+from models import Movie, Director, Genre
+
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///test.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['JSON_AS_ASCII'] = False
 app.config['RESTX_JSON'] = {'ensure_ascii': False, 'indent': 2}
-db = SQLAlchemy(app)
 
-
-class Movie(db.Model):
-    __tablename__ = 'movie'
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(255))
-    description = db.Column(db.String(255))
-    trailer = db.Column(db.String(255))
-    year = db.Column(db.Integer)
-    rating = db.Column(db.Float)
-    genre_id = db.Column(db.Integer, db.ForeignKey("genre.id"))
-    genre = db.relationship("Genre")
-    director_id = db.Column(db.Integer, db.ForeignKey("director.id"))
-    director = db.relationship("Director")
-
-class Director(db.Model):
-    __tablename__ = 'director'
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(255))
-
-
-class Genre(db.Model):
-    __tablename__ = 'genre'
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(255))
-
-
-class MovieSchema(Schema):
-    id = fields.Int()
-    title = fields.Str()
-    description = fields.Str()
-    trailer = fields.Str()
-    year = fields.Int()
-    rating = fields.Int()
-    genre_id = fields.Int()
-    director_id = fields.Int()
-
-
-class DirectorSchema(Schema):
-    id = fields.Int()
-    name = fields.Str()
-
-
-class GenreSchema(Schema):
-    id = fields.Int()
-    name = fields.Str()
-
+db.init_app(app)
+app.app_context().push()
 
 movie_schema = MovieSchema()
 movies_schema = MovieSchema(many=True)
@@ -79,14 +35,13 @@ class MovieView(Resource):
     def get(self):
         director_id = request.args.get('director_id')
         genre_id = request.args.get('genre_id')
-        if director_id and genre_id:
-            movies = db.session.query(Movie).filter(Movie.director_id == director_id, Movie.genre_id == genre_id).all()
-        elif director_id:
-            movies = db.session.query(Movie).filter(Movie.director_id == director_id).all()
-        elif genre_id:
-            movies = db.session.query(Movie).filter(Movie.genre_id == genre_id).all()
-        else:
-            movies = db.session.query(Movie).all()
+        movies = db.session.query(Movie)
+
+        if director_id:
+            movies = movies.filter(Movie.director_id == director_id)
+        if genre_id:
+            movies = movies.filter(Movie.genre_id == genre_id)
+        movies = movies.all()
 
         if len(movies) > 0:
             movies_json = movies_schema.dump(movies)
@@ -111,7 +66,6 @@ class MoviesView(Resource):
 class DirectorsView(Resource):
     def post(self):
         req_json = request.json
-        # req_dict = director_schema.loads(req_json)
         director = Director(**req_json)
         db.session.add(director)
         db.session.commit()
@@ -144,7 +98,6 @@ class DirectorView(Resource):
 class GenresView(Resource):
     def post(self):
         req_json = request.json
-        # dict_genre = genre_schema.load(req_json)
         genre = Genre(**req_json)
         db.session.add(genre)
         db.session.commit()
